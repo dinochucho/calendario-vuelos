@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calendario de Vuelos ✈️</title>
+
+  <!-- FullCalendar CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f7f7f7;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    #calendar {
+      max-width: 900px;
+      margin: 40px auto;
+      background-color: #fff;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      min-height: 600px;
+    }
+
+    #vuelos-baratos {
+      max-width: 900px;
+      margin: 40px auto;
+      margin-top: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .vuelo-card {
+      padding: 12px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    h2 {
+      text-align: center;
+      margin-top: 40px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <h1>📅 Calendario de Vuelos</h1>
+  <div id="calendar"></div>
+
+  <h2>🤑 Vuelos más baratos</h2>
+  <div id="vuelos-baratos"></div>
+
+  <!-- FullCalendar JS -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async function () {
+      const calendarEl = document.getElementById('calendar');
+      const vuelosContainer = document.getElementById('vuelos-baratos');
+
+      let eventos = [];
+
+      try {
+        const res = await fetch('/api/vuelos');
+        const data = await res.json();
+
+        eventos = data.flatMap(vuelo => ([
+          {
+            title: `✈️ Ida a ${vuelo.destino}`,
+            start: vuelo.fecha_ida
+          },
+          {
+            title: `🔁 Regreso de ${vuelo.destino}`,
+            start: vuelo.fecha_vuelta
+          }
+        ]));
+      } catch (err) {
+        console.error('❌ Error al cargar vuelos:', err);
+      }
+
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        locale: 'es',
+        initialView: 'dayGridMonth',
+        events: eventos,
+        dateClick: async function (info) {
+          const destino = prompt("✈️ ¿Destino?");
+          const vuelta = prompt("🔁 ¿Fecha de vuelta? (dd-mm-yyyy)");
+          const origen = "Montevideo";
+
+          if (destino && vuelta) {
+            const partes = vuelta.split("-");
+            const vueltaISO = `${partes[2]}-${partes[1]}-${partes[0]}`;
+
+            try {
+              const res = await fetch('/api/vuelos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fecha_ida: info.dateStr,
+                  fecha_vuelta: vueltaISO,
+                  destino,
+                  origen
+                })
+              });
+
+              const data = await res.json();
+
+              alert('✈️ Vuelo registrado con éxito');
+
+              calendar.addEvent({
+                title: `✈️ Ida a ${data.destino}`,
+                start: data.fecha_ida
+              });
+              calendar.addEvent({
+                title: `🔁 Regreso de ${data.destino}`,
+                start: data.fecha_vuelta
+              });
+
+              // 🔁 Mostrar vuelos baratos
+              const resBaratos = await fetch('/api/vuelos/baratos');
+              const vuelosBaratos = await resBaratos.json();
+
+              vuelosContainer.innerHTML = ''; // Limpiar antes
+
+              if (vuelosBaratos.length === 0) {
+                vuelosContainer.innerHTML = '<p style="text-align:center">⚠️ No hay vuelos baratos registrados todavía.</p>';
+              } else {
+                vuelosBaratos.forEach(v => {
+                  const div = document.createElement('div');
+                  div.classList.add('vuelo-card');
+                  div.innerHTML = `
+                    <strong>${v.origen} ➡️ ${v.destino}</strong><br>
+                    🗓️ Ida: ${v.fecha_ida} | Vuelta: ${v.fecha_vuelta}<br>
+                    💰 Precio: $${v.precio}
+                  `;
+                  vuelosContainer.appendChild(div);
+                });
+              }
+
+            } catch (err) {
+              alert('❌ Error al guardar el vuelo');
+              console.error(err);
+            }
+          }
+        }
+      });
+
+      calendar.render();
+    });
+  </script>
+</body>
+</html>
